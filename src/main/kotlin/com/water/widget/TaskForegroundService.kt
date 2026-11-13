@@ -171,7 +171,10 @@ class TaskForegroundService : Service() {
         )
         loadAndRunAccountTasks(account, laneId, runGeneration) { gained ->
             if (!isActive(runGeneration)) return@loadAndRunAccountTasks
-            if (gained != null) appendTaskLog("  [${account.phone}] 本账号已核验增加 $gained 分")
+            when {
+                gained == 0 -> appendTaskLog("  [${account.phone}] 本账号积分未增加")
+                gained != null -> appendTaskLog("  [${account.phone}] 本账号已核验增加 $gained 分")
+            }
             TaskRunRepository.updateLane(
                 laneId = laneId,
                 currentTask = if (index + 1 < accounts.size) "准备下一个账号" else "正在收尾",
@@ -211,7 +214,12 @@ class TaskForegroundService : Service() {
                 val work = TaskMissionPlanner.buildWork(missions, counts)
                 TaskRunRepository.updateLane(laneId = laneId, currentTask = "检查每日签到", phase = TaskLanePhase.SIGNING_IN)
                 runDailySignInIfNeeded(activeAccount, data, points, laneId, runGeneration) {
-                    appendTaskLog("  待执行 ${work.size} 次任务（按服务端当天限额）")
+                    val planMessage = when {
+                        missions.isEmpty() -> "服务端未返回可识别的积分任务"
+                        work.isEmpty() -> "任务列表中没有符合条件且剩余次数大于 0 的任务（共 ${missions.size} 项）"
+                        else -> "本次计划执行 ${work.size} 次积分任务"
+                    }
+                    appendTaskLog("  [${account.phone}] $planMessage")
                     runMissionItems(activeAccount, work, 0, points, laneId, runGeneration) {
                         verifyAccountIncrease(activeAccount, points, laneId, runGeneration, finalCheck = true, done = done)
                     }
@@ -540,6 +548,8 @@ class TaskForegroundService : Service() {
         appendTaskLog(
             if (hadFailures) {
                 "===== 任务结束，部分未完成，已核验增加 $gained 分 ====="
+            } else if (gained == 0) {
+                "积分任务运行结束，本次积分未增加"
             } else {
                 "===== 全部完成，已核验增加 $gained 分 ====="
             }

@@ -82,7 +82,7 @@ fun TaskScreen(
                 Text(
                     when {
                         state.running -> "任务运行中"
-                        state.result == TaskRunResult.COMPLETED -> "本次任务已完成"
+                        state.result == TaskRunResult.COMPLETED -> "本次运行已结束"
                         state.result == TaskRunResult.PARTIAL -> "本次已结束 · 部分任务未完成或到账未确认"
                         state.result == TaskRunResult.CANCELLED -> "本次任务已停止"
                         state.result == TaskRunResult.FAILED -> "本次运行失败，请查看记录"
@@ -91,15 +91,16 @@ fun TaskScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
-                if (state.totalGainedText != "0" || state.result == TaskRunResult.COMPLETED) {
+                if (state.totalGainedText != "0") {
                     Text(
                         "已确认增加 ${state.totalGainedText} 积分",
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                if (state.totalGainedText == "0" &&
-                    (state.running || state.result != TaskRunResult.NONE && state.result != TaskRunResult.COMPLETED)) {
+                if (state.totalGainedText == "0" && state.result == TaskRunResult.COMPLETED) {
+                    Text("本次积分未增加，请查看运行记录", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                } else if (state.totalGainedText == "0" && (state.running || state.result != TaskRunResult.NONE)) {
                     Text("暂未确认有积分增加", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                 }
                 if (state.running) {
@@ -117,7 +118,7 @@ fun TaskScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (state.running) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                if (state.totalGainedText != "0" || state.result == TaskRunResult.COMPLETED) {
+                if (state.totalGainedText != "0") {
                     Text("按官方累计积分确认，包含运行期间从其他途径获得的积分。", fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

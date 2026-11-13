@@ -56,7 +56,7 @@ class TaskNotificationCompletionTest {
             assertEquals("应只保留一条结束通知", 1, notifications.size)
             assertEquals(AppNotifications.TASK_RESULT_ID, notifications.single().id)
             val notification = notifications.single().notification
-            assertEquals(if (cancelled) "积分任务已停止" else "积分任务已完成",
+            assertEquals(if (cancelled) "积分任务已停止" else "积分任务运行结束",
                 notification.extras.getString(Notification.EXTRA_TITLE))
             assertFalse(notification.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))
             assertEquals(0, notification.flags and Notification.FLAG_ONGOING_EVENT)

@@ -12,7 +12,10 @@ object TaskNotificationTextFormatter {
     fun format(state: TaskRunState): TaskNotificationText {
         if (!state.running) {
             return when (state.result) {
-                TaskRunResult.COMPLETED -> TaskNotificationText(
+                TaskRunResult.COMPLETED -> if (state.totalGained == 0) TaskNotificationText(
+                    title = "积分任务运行结束",
+                    text = "本次积分未增加，可在运行记录中查看详情"
+                ) else TaskNotificationText(
                     title = "积分任务已完成",
                     text = "本次已确认增加 ${state.totalGained} 分"
                 )

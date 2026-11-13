@@ -85,6 +85,16 @@ class TaskNotificationTextFormatterTest {
     }
 
     @Test
+    fun completedRunWithZeroPointsReportsNoIncrease() {
+        val state = TaskRunReducer.finish(TaskRunState(running = true))
+
+        assertEquals(
+            TaskNotificationText("积分任务运行结束", "本次积分未增加，可在运行记录中查看详情"),
+            TaskNotificationTextFormatter.format(state)
+        )
+    }
+
+    @Test
     fun formatsPartialCompletionWithoutClaimingFullSuccess() {
         val state = TaskRunReducer.finish(
             TaskRunState(running = true, totalGained = 20),
