@@ -58,37 +58,58 @@ object TaskMissionPlanner {
     fun verifiedIncrease(before: Int?, after: Int?): Int? =
         if (before == null || after == null || after < before) null else after - before
 
-    fun merge(mainMissions: JSONArray?, appMissions: JSONArray?): List<PlannedMission> {
-        val out = mutableListOf<PlannedMission>()
-        val seen = mutableSetOf<String>()
+    fun merge(mainMissions: JSONArray?, appMissions: JSONArray?): List<PlannedMission> =
+        (readMissions(mainMissions, TaskPlatform.MAIN) + readMissions(appMissions, TaskPlatform.APP))
+            .distinctBy(PlannedMission::refId)
 
-        fun addAll(arr: JSONArray?, platform: TaskPlatform) {
-            if (arr == null) return
-            for (i in 0 until arr.length()) {
-                val obj = arr.optJSONObject(i) ?: continue
-                val refId = obj.optString("refId", "")
-                if (refId.isBlank() || !seen.add(refId)) continue
-                out += PlannedMission(
-                    refId = refId,
-                    name = obj.optString("name", obj.optString("title", "任务")),
-                    score = obj.optInt("score", 0),
-                    limit = obj.optInt("limit", 0),
-                    platform = platform
-                )
-            }
+    private fun readMissions(missions: JSONArray?, platform: TaskPlatform): List<PlannedMission> = buildList {
+        if (missions == null) return@buildList
+        for (index in 0 until missions.length()) {
+            val mission = missions.optJSONObject(index) ?: continue
+            val refId = mission.optString("refId")
+            if (refId.isBlank()) continue
+            add(PlannedMission(
+                refId = refId,
+                name = mission.optString("name", mission.optString("title", "任务")),
+                score = mission.optInt("score", 0),
+                limit = mission.optInt("limit", 0),
+                platform = platform
+            ))
         }
+    }
 
-        addAll(mainMissions, TaskPlatform.MAIN)
-        addAll(appMissions, TaskPlatform.APP)
-        return out
+    fun diagnostics(
+        mainMissions: JSONArray?,
+        appMissions: JSONArray?,
+        mainCounts: Map<String, Int>,
+        appCounts: Map<String, Int>
+    ): List<String> = buildList {
+        val main = readMissions(mainMissions, TaskPlatform.MAIN).distinctBy(PlannedMission::refId)
+        val app = readMissions(appMissions, TaskPlatform.APP).distinctBy(PlannedMission::refId)
+        if (mainMissions != null) {
+            val eligible = main.count { remaining(it, mainCounts) > 0 }
+            add("支付宝任务列表：收到 ${mainMissions.length()} 项，识别 ${main.size} 项，按本端进度可排 $eligible 项")
+        }
+        if (appMissions != null) {
+            val eligible = app.count { remaining(it, appCounts) > 0 }
+            add("App 任务列表：收到 ${appMissions.length()} 项，识别 ${app.size} 项，按本端进度可排 $eligible 项")
+        }
+        val mainById = main.associateBy(PlannedMission::refId)
+        val blocked = app.filter { mission ->
+            val mainMission = mainById[mission.refId] ?: return@filter false
+            remaining(mainMission, mainCounts) == 0 && remaining(mission, appCounts) > 0
+        }
+        for (mission in blocked.take(5)) {
+            val appRemaining = remaining(mission, appCounts)
+            add("同编号任务「${mission.name}」：支付宝可排 0 次，App 可排 $appRemaining 次，本轮保留支付宝条目")
+        }
+        if (blocked.size > 5) add("另有 ${blocked.size - 5} 项 App 任务受到相同的编号冲突影响")
     }
 
     fun buildWork(missions: List<PlannedMission>, doneCount: Map<String, Int>, maxItems: Int = 30): List<MissionWorkItem> {
         val out = mutableListOf<MissionWorkItem>()
         for (mission in missions) {
-            if (shouldSkip(mission.name)) continue
-            if (mission.refId.isBlank() || mission.score <= 0 || mission.limit <= 0) continue
-            val remaining = (mission.limit - (doneCount[mission.refId] ?: 0)).coerceAtLeast(0)
+            val remaining = remaining(mission, doneCount)
             if (remaining <= 0) continue
             for (round in 1..remaining) {
                 out += MissionWorkItem(
@@ -103,6 +124,11 @@ object TaskMissionPlanner {
             }
         }
         return out
+    }
+
+    private fun remaining(mission: PlannedMission, doneCount: Map<String, Int>): Int {
+        if (shouldSkip(mission.name) || mission.refId.isBlank() || mission.score <= 0 || mission.limit <= 0) return 0
+        return (mission.limit - (doneCount[mission.refId] ?: 0)).coerceAtLeast(0)
     }
 
     private fun shouldSkip(name: String): Boolean = listOf("免费权益", "借贷", "贷款").any { name.contains(it) }

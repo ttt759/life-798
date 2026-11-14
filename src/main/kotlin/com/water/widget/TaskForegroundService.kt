@@ -206,7 +206,9 @@ class TaskForegroundService : Service() {
                 }
                 val data = mainData ?: requireNotNull(appData)
                 val points = TaskPointsTracker(TaskMissionPlanner.progress(data).totalScore)
-                val missions = TaskMissionPlanner.merge(mainData?.optJSONArray("missions"), appData?.optJSONArray("missions"))
+                val mainMissions = mainData?.optJSONArray("missions")
+                val appMissions = appData?.optJSONArray("missions")
+                val missions = TaskMissionPlanner.merge(mainMissions, appMissions)
                 val mainCounts = mainData?.let(TaskMissionPlanner::progress)?.completed.orEmpty()
                 val appCounts = appData?.let(TaskMissionPlanner::progress)?.completed.orEmpty()
                 val counts = missions.associate { it.refId to
@@ -214,6 +216,11 @@ class TaskForegroundService : Service() {
                 val work = TaskMissionPlanner.buildWork(missions, counts)
                 TaskRunRepository.updateLane(laneId = laneId, currentTask = "检查每日签到", phase = TaskLanePhase.SIGNING_IN)
                 runDailySignInIfNeeded(activeAccount, data, points, laneId, runGeneration) {
+                    if (work.isEmpty()) {
+                        TaskMissionPlanner.diagnostics(mainMissions, appMissions, mainCounts, appCounts).forEach { line ->
+                            appendTaskLog("  [${account.phone}] $line")
+                        }
+                    }
                     val planMessage = when {
                         missions.isEmpty() -> "服务端未返回可识别的积分任务"
                         work.isEmpty() -> "任务列表中没有符合条件且剩余次数大于 0 的任务（共 ${missions.size} 项）"
@@ -235,7 +242,9 @@ class TaskForegroundService : Service() {
         done: (JSONObject?) -> Unit
     ) {
         val token = if (useApp) account.appToken else account.token
+        val platform = if (useApp) "App" else "支付宝"
         if (token.isNullOrBlank()) {
+            appendTaskLog("  [${account.phone}] $platform 未登录，跳过任务读取")
             done(null)
             return
         }
@@ -254,7 +263,7 @@ class TaskForegroundService : Service() {
                 }
                 if (!valid) {
                     hadFailures = true
-                    appendTaskLog("  [${account.phone}] "+(if (useApp) "App" else "支付宝")+"任务读取失败，跳过该平台: "+(error ?: "响应缺失"))
+                    appendTaskLog("  [${account.phone}] ${platform}任务读取失败，跳过该平台: " + (error ?: "响应缺失"))
                 }
                 done(if (valid) data else null)
             }

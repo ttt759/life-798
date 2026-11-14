@@ -78,4 +78,25 @@ class TaskMissionPlannerTest {
         assertEquals(null, TaskMissionPlanner.verifiedIncrease(100, 99))
     }
 
+    @Test
+    fun diagnosticsShowAppTasksLostWhenTheAlipayEntryHasNoRemainingQuota() {
+        val main = JSONArray("""[{"refId":"shared","name":"看资讯","score":10,"limit":2}]""")
+        val app = JSONArray("""[{"refId":"shared","name":"看资讯","score":10,"limit":2},{}]""")
+
+        val lines = TaskMissionPlanner.diagnostics(main, app, mapOf("shared" to 2), mapOf("shared" to 1))
+
+        assertEquals(listOf(
+            "支付宝任务列表：收到 1 项，识别 1 项，按本端进度可排 0 项",
+            "App 任务列表：收到 2 项，识别 1 项，按本端进度可排 1 项",
+            "同编号任务「看资讯」：支付宝可排 0 次，App 可排 1 次，本轮保留支付宝条目"
+        ), lines)
+        assertTrue(TaskMissionPlanner.buildWork(TaskMissionPlanner.merge(main, app), mapOf("shared" to 2)).isEmpty())
+    }
+
+    @Test
+    fun diagnosticsDistinguishAnEmptyListFromAnUnavailableChannel() {
+        assertEquals(listOf("App 任务列表：收到 0 项，识别 0 项，按本端进度可排 0 项"),
+            TaskMissionPlanner.diagnostics(null, JSONArray(), emptyMap(), emptyMap()))
+    }
+
 }
